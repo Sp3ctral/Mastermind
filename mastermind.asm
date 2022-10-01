@@ -1,6 +1,5 @@
 .data 
 	randWordArray: .space 4	# array of 4 bytes. Each ascii char takes 1 byte and we need 4 to store 4 random ints.
-	.align 2
 	userInput: .space 8  # array for the input for the user
 	welcome: .asciiz "Welcome to Mastermind\n"	# welcome message
 	guessPrompt: .asciiz "Guess a 4-letter string using only A-E: "
@@ -14,6 +13,8 @@ main:
 	jal intro
 	
 	la $s0, randWordArray	# load base address of int array into $s0
+	la $s1, userInput	# load base address of input array into $s1
+	
 	la $a0, open 	# load "(" into $a0
 	li $v0, 4 		# system service code for printing string
 	syscall 
@@ -67,13 +68,29 @@ readInput:
 
 	jr $ra # return to caller
 	
+backupArraysToStack:
+	lw $t0, 0($s0)
+	sw $t0, 4($sp)
+	lw $t0, 0($s1)
+	sw $t0, 8($sp)
+	li $t0, 0
+	
+	jr $ra
+	
+restoreArraysFromStack:
+	lw $t0, 4($sp)
+	sw $t0, ($s0)
+	lw $t0, 8($sp)
+	sw $t0, ($s1)
+	li $t0, 0
+	
+	jr $ra
+	
 outerLoop:
 	sw $ra, 0($sp) # store the address back to the caller (main)
 	jal readInput # call function to read user input
-	la $s1, userInput
-	sw $s0, 4($sp)
-	sw $s1, 8($sp)
-	addi $t0, $t0, 1 # total tries counter, we need this to stick around
+	jal backupArraysToStack
+	addi $s2, $s2, 1 # total tries counter, we need this to stick around
 	
 outerNumCharsCorrectLoop:
 	beq $t1, 4, outerNumCharsCorrectLoopEnd
@@ -85,18 +102,21 @@ innerLoopStart:
 	lbu $t3, 0($s1)
 	lbu $t4, 0($s0)
 	beq $t3, $t4, zeroBytesAndIncrement
+	
 continueInnerLoop:
 	addi $s0, $s0, 1
 	j innerLoopStart
 
 innerLoopEnd:
-
 	addi $t1, $t1, 1
 	addi $s1, $s1, 1 
 	la $s0, randWordArray
 	j outerNumCharsCorrectLoop
 
 outerNumCharsCorrectLoopEnd:
+la $s0, randWordArray
+la $s1, userInput
+jal restoreArraysFromStack
 # Good progress! Just zero out the registers used previously, restore the values of the arrays,
 # free up the used stack space, prepare for the number position checking loop!
 	
