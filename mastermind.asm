@@ -2,7 +2,7 @@
 	randWordArray: .space 4	# array of 4 bytes. Each ascii char takes 1 byte and we need 4 to store 4 random ints.
 	userInput: .space 8  # array for the input for the user
 	playAgainInput: .space 4
-	welcome: .asciiz "Welcome to Mastermind\n"	# welcome message
+	welcome: .asciiz "Welcome to MIPStermind\n"	# welcome message
 	guessPrompt: .asciiz "Guess a 4-letter string using only A-E: "
 	correctLetters: .asciiz "Correct Letters: "
 	correctPositions: .asciiz "\nCorrect Positions: "
