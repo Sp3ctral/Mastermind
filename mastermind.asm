@@ -1,8 +1,12 @@
+# MIPStermind game that allows the user to guess 4-randomly chosen letters by the computer
+# @Author Marvin Hozi [mhozi18@georgefox.edu]
+
 .data 
-	randWordArray: .space 4	# array of 4 bytes. Each ascii char takes 1 byte and we need 4 to store 4 random ints.
-	userInput: .space 8  # array for the input for the user
-	playAgainInput: .space 4
-	welcome: .asciiz "Welcome to MIPStermind\n"	# welcome message
+	# Vars used throughout the program
+	randWordArray: .space 4		# array of 4 bytes. Each ascii char needs 1 byte of space
+	userInput: .space 8			# array for the input of the user (4 chars + \n, multiples of 4 to avoid alignment issues)
+	playAgainInput: .space 4 	# We only need 2 bytes here but 4 ensures we avoid word alignment issues later
+	welcome: .asciiz "Welcome to MIPStermind\n"
 	guessPrompt: .asciiz "Guess a 4-letter string using only A-E: "
 	correctLetters: .asciiz "Correct Letters: "
 	correctPositions: .asciiz "\nCorrect Positions: "
@@ -12,74 +16,88 @@
 	endStatement: .asciiz "Thanks for Playing"
 	open: .asciiz "("
 	close: .asciiz ")\n\n"
-
+	
 .text
-
+###############
+# Dfn: Entry point for the program; Main
+###############
 main:
-	jal intro	# Go to the introduction procedure
+	jal intro				# Go TO intro 
 	
-	la $s0, randWordArray	# load base address of int array
-	la $s1, userInput		# load base address of input storage array
+	la $s0, randWordArray	# $s0 = randWordArray
+	la $s1, userInput		# $s1 = userInput
 	
-	la $a0, open	# load "(" into $a0
-	li $v0, 4		# system service code for printing string
+	la $a0, open			# $a0 = "("
+	li $v0, 4				# system service code for printing string
 	syscall 
 	
-	jal generate_rand	# Generate 4 random numbers
+	jal generateRand		# generateRand();
 	
-	la $a0, close 		# load ")\n"
-	li $v0, 4 			# system service code for printing string, not char because we also have \n tacked on
+	la $a0, close 			# $a0 =  ")\n"
+	li $v0, 4 				# print("\n"), Print string, not char because \n is not 1 char
 	syscall
 	
-	addi $sp, $sp, -12	# Allocate 3 words onto the stack
-	jal outerLoop		# go to the outer "while true" game loop
+	addi $sp, $sp, -12		# Allocate 3 words onto the stack
+	jal gameLoop			# gameLoop();
 	
-	addi $sp, $sp, 24	# restore the state of the stack
-	j exit				# Exit safely!!!
+	addi $sp, $sp, 24		# restore the state of the stack
+	j exit					# GO TO exit
 	
-# Show the intro statements to the player
+###############
+# Dfn: Show the introduction statement to the player
+###############
 intro:
-	la $a0, welcome		# Load the address of the string 
-	li $v0, 4			# Print the welcome statement        
+	la $a0, welcome			# $a0 = welcome 
+	li $v0, 4				# print("Welcome to MIPStermind\n")       
 	syscall
 	
-	jr $ra	# Go back to the caller, we don't need to clean up these register, we will overwrite them later
+	jr $ra					# Return to Main
 
-# Generate 4 random numbers and store them into an array
-generate_rand:
-	li $a1, 5  				# Set the upper boundary for random num generation (0-4 inclusive)
-	li $v0, 42  			# System service code for generating the random number.
+###############
+# Dfn: Generates 4 random letters between [A-E]
+# Pre: randWordArray = null
+# Post: randWordArray = Array of 4 ascii chars
+###############
+generateRand:
+	li $a1, 5  				# $a1 = 5: upper boundary for random num generation choose from [0-4 inclusive]
+	li $v0, 42  			# $a0 = random(0, 5);
 	syscall
 
-	addi $a0, $a0, 65 	# Add the base (65) to a number between 0-4(inclusive) to get ascii char (A-E inclusive)
-	sb $a0, 0($s0) 		# Store the ascii code into ith position of the array
-	li $v0, 11   		# Convert the ascii code to a char and print out the result
+	addi $a0, $a0, 65 		# $a0 += 65: Add the base (65) to a number between 0-4(inclusive) 
+	sb $a0, 0($s0) 			# randWordArray[i] = $a0
+	li $v0, 11   			# print($a0)
 	syscall
 	
-	addi $s0, $s0, 1 	# Increment the base address of byte the array by 1 to go to the next position
-	addi $t0, $t0, 1 	# Increment our loop counter by 1
+	addi $s0, $s0, 1 		# &randWordArray++
+	addi $t0, $t0, 1 		# i++
 	
-	bne $t0, 4, generate_rand	# If the loop is less than 4 iterations, keep going, else exit it
+	bne $t0, 4, generateRand	# if (i < 4) GO TO generateRand
 	
 	# We are done with the loop so we need to clean up our modified registers
 	la $s0, randWordArray 	# We operated on $s0 earlier so we must restore the original state
 	li $t0, 0				# Restore the loop counter to 0 because we modified it
-	jr $ra					# Return to the caller
+	jr $ra					# Return to Main
 
-# Read 5 bytes (including line feed [\n]) from the player and store them in the array
+###############
+# Dfn: Read 5 bytes (including line feed [\n]) from the player and store them in the array
+# Pre: userInput = null
+# Post: userInput = Array of 4 ascii chars
+###############
 readInput:
-	la $a0, guessPrompt	# Load the address of the input prompt into the arg register
+	la $a0, guessPrompt	# $a0 = "Guess a 4-letter string using only A-E: "
 	li $v0, 4			# System service code for printing string
 	syscall
 
-	la $a0, userInput	# Load the array where the user input will go
-	li $a1, 6			# We will read n-1 bytes so 5 characters: 4 chars (4 bytes) + \n (1 byte)
-	li $v0, 8			# System service code for storing input
+	la $a0, userInput	# $a0 = userInput[]
+	li $a1, 6			# $a1 = 6: We will read n-1 bytes so 5 characters: 4 chars (4 bytes) + \n (1 byte)
+	li $v0, 8			# $v0 = 8: System service code for storing input
 	syscall
 
 	jr $ra				# Return to caller
 	
-# We need to backup our arrays onto the stack before we modify them so we can operate on them again
+###############
+# Dfn: Backs up arrays onto the stack to preserve values across guessing tries
+###############
 backupArraysToStack:
 	lw $t0, 0($s0)		# Load the random letters into $s0
 	sw $t0, 4($sp)		# Store the random letters into the second word on the stack
@@ -89,55 +107,68 @@ backupArraysToStack:
 	
 	jr $ra # Return to caller
 	
-# We need to restore backed up stack arrays into memory to operate on them again [Counting correct positions]
+###############
+# Dfn: Restores backed up arrays to operate on them for every user guess try (counting positions, etc)
+###############
 restoreArraysFromStack:
 	lw $t0, 4($sp)		# Load the 2nd word from the stack into register
 	sw $t0, ($s0)		# Store the word from register back into main memory
 	lw $t0, 8($sp)		# Load the 3nd word from the stack into register
 	sw $t0, ($s1)		# Store the word from register back into main memory
-	li $t0, 0			# Reset the state
+	li $t0, 0			# $t0 = 0: Reset the state
 	
 	jr $ra				# Return to caller
 	
-# This is our main game loop. Sort of like a "while true" but not really...
-outerLoop:
+###############
+# Dfn: Main loop for the game to keep the game going as long as user tries are wrong
+###############
+gameLoop:
 	sw $ra, 0($sp)			# $ra will be overwritten soon so we need to store the address to our caller (MAIN)
 	jal readInput			# Call function to read user input
 	jal backupArraysToStack	# Backup our arrays, we are about to operate on them
-	addi $s2, $s2, 1		# Total tries counter, we need this to stick around, this loop won't reset it
+	addi $s2, $s2, 1		# $s2++: Total tries counter, we need this to stick around
 	
 	# ASCII "0 + i" to remove matching chars! A neat trick to "take out" matching strings without having
 	# them double-counted again when iterating in a double loop. 
-	# would love your input on this trick!
-	li $t6, 48				
+	li $t6, 48				# $t6 = 0 			
 	
-# Loop that iterates through the user input array (i=0, i < 4, i++)
+###############
+# Dfn: Outer loop for iterating through every user input char
+###############
 outerCharLoop:
-	beq $t1, 4, outerCharLoopEnd	# I know I can simplify to bne , but I truly believe this is a good balance
-									# between readability and performance
-	li $t2, 0						# Reset our inner loop i to start from the beginning of the rand word array
+	beq $t1, 4, outerCharLoopEnd	# I know I can simplify to bne , but I truly believe this is a good 
+									# balance between readability and performance for a program of this size
+	li $t2, 0						# $t2 = 0 : start from beginning of array
 
-# Loop that iterates through the random word array (j=0, j < 4, j++)
+###############
+# Dfn: Inner loop for iterating through every randomly-generated char for each user input char
+###############
 innerCharLoop:
-	beq $t2, 4, innerLoopEnd		# Restart the loop as until we hit 4 iterations
-	addi $t2, $t2, 1				#  j++
-	lbu $t3, 0($s1)					# Load into $t3 the first char from the user input
-	lbu $t4, 0($s0)					# Load into $t4 the first char from the user input
-	beq $t3, $t4, scrambleBytesAndShift	# If the chars are equal, scramble them
+	beq $t2, 4, innerLoopEnd		# if ($t2 = 4) GO TO innerLoopEnd
+	addi $t2, $t2, 1				# j++
+	lbu $t3, 0($s1)					# $t3 = userInput[0]
+	lbu $t4, 0($s0)					# $t4 = randWordArray[0]
+	beq $t3, $t4, scrambleAndShift	# if (userInput[0] = randWordArray[0]) GO TO scrambleAndShift
 	
-# After the main body of the inner loop is done we set up for next run of outer loop
+###############
+# Dfn: Set up values for the next run of the outer loop and continue the inner loop
+###############
 continueInnerLoop:
-	addi $s0, $s0, 1 				# Go to the next address of the random char array
+	addi $s0, $s0, 1 				# &randWordArray++
 	j innerCharLoop					# Loop the inner loop again through every random char
 
-# Set up the values for the next char from the user input to be matched with the rand char array
+###############
+# Dfn: Set up the values for the next char from the user input to be matched with the rand char array
+###############
 innerLoopEnd:
 	addi $t1, $t1, 1				# i++
-	addi $s1, $s1, 1				# Move to the next user input string
-	la $s0, randWordArray			# Start from the first rand char array position again
+	addi $s1, $s1, 1				# $s1 = &userInput++
+	la $s0, randWordArray			# $s0 = randWordArray
 	j outerCharLoop					# Keep going until we exhaust user input chars
 
-# Our double loop ends so we must reset the state of the registers + addresses that we operated on
+###############
+# Dfn: End outer loop and resets the state of the registers + addresses that we operated on
+###############
 outerCharLoopEnd:
 la $s0, randWordArray				# Reset the address of the rand char array
 la $s1, userInput					# Reset the address of user the input char array
@@ -153,30 +184,36 @@ li $t6, 0							# Reset state, callee modified
 jal restoreArraysFromStack			# Restore array clones since we now need to count correct positions	
 j countValidCharPositions			# Start counting the char correct positions
 	
-# Strategy: Set the bytes that match to 0 + i, 0 + i + 1 so they never collide and trigger a false match
-# when double looping. Fool-proof O(1) solution that negates performance loss of double looping.
-# ALTERNATIVE STRATEGY: Shift bytes of the matching bytes.
-scrambleBytesAndShift:
-	addi $t6, $t6, 1				# Add 1 to $t6 so it's now 1 for first run
-	sb $t6, 0($s0)					# Set the ith matching byte to $t6
-	addiu $t6, $t6, 1				# Add 1 to $t6 so it's now 1 + previous value of $t6
-	sb $t6, 0($s1)					# Set the jth matching byte to $t6 + prev value of $t6
-	addi $t5, $t5, 1				# Increment matching chars++
+###############
+# Dfn: Avoid double-counting chars by scarmbling them using the accumulator value (i) + char value
+# after the addition, the current byte is rotated to avoid future collision when counting matches
+###############
+scrambleAndShift:
+	addi $t6, $t6, 1				# $t6++
+	sb $t6, 0($s0)					# randWordArray[0] = $t6
+	addi $t6, $t6, 1				# $t6++
+	sb $t6, 0($s1)					# userInput[0] = $t6
+	addi $t5, $t5, 1				# $t5++: increment matching chars
 	j continueInnerLoop				# Keep checking chars in inner loop
 	
-# STRATEGY: align chars and check vertically. Compare Arr[i] <-> ArrTwo[i], then increment correct position
+###############
+# Dfn: Checks matching characters vertically. Compare ArrOne[i] <-> ArrTwo[i], increment correct position.
+###############
 countValidCharPositions:
-	lbu $t1, 0($s0)							# Load the first character from the random words array
-	lbu $t2, 0($s1)							# Load the first character from the user input array
-	bne $t1, $t2, continueCharCorrectLoop	# Sync positions and restart loop
-	addi $t4, $t4, 1 						# matching chars num++
+	lbu $t1, 0($s0)							# $t1 = randWordArray[0]
+	lbu $t2, 0($s1)							# $t2 = userInput[0]
+	bne $t1, $t2, continueCharCorrectLoop	# if (randWordArray[0] != userInput[0]) GO TO continueCharCorrectLoop
+	addi $t4, $t4, 1 						# $t4++
 
+###############
+# Dfn: Proceed to the next character in both: userInput and randWords arrays. Then reset modified registers.
+###############
 continueCharCorrectLoop:
-	addi $s0, $s0, 1						# Go to the next character in the rand char array
-	addi $s1, $s1, 1						# Go to the next character in the user input array
-	addi $t3, $t3, 1						# Loop counter++
-	bne $t3, 4, countValidCharPositions		# Restart the loop until we iterate 4 times (4 chars)
-	move $s4, $t4							# Store num of matching chars to $s4 persist
+	addi $s0, $s0, 1						# &randWordArray++
+	addi $s1, $s1, 1						# &userInput++
+	addi $t3, $t3, 1						# $t3++
+	bne $t3, 4, countValidCharPositions		# if ($t3 != 4) GO TO countValidCharPositions
+	move $s4, $t4							# $s4 = $t4
 	li $t1, 0								# Reset state, callee modified
 	li $t2, 0								# Reset state, callee modified
 	li $t3, 0								# Reset state, callee modified
@@ -184,6 +221,9 @@ continueCharCorrectLoop:
 	la $s0, randWordArray					# Reset the address state
 	la $s1, userInput 						# Reset the address state
 	
+###############
+# Dfn: Verify we have 4 correct chars and correct positions then prints results.
+###############
 verifyCharsAndOutputResults:
 	la $a0, correctLetters					# Print correct letter amounts string
 	li $v0, 4
@@ -201,14 +241,14 @@ verifyCharsAndOutputResults:
 	li $v0, 1
 	syscall
 	
-	li $a0, 10								# This just prints a new line :D (LF = 10 in ASCII)
+	li $a0, 10								# This just prints a new line :D (Line Feed = 10 in ASCII)
 	li $v0, 11
 	syscall
 
 	slti $s5, $s3, 4						# If both: char counts and positions are 4, ask if play again...
 	slti $s5, $s4, 4
 	lw $ra, 0($sp)							# Prepare main address if user won't play again :D
-	bne $s5, 0, outerLoop					# If positions && counts != 4, ask for another guess
+	bne $s5, 0, gameLoop					# If positions && counts != 4, ask for another guess
 	
 	la $a0, congratsOne						# Positions && Counts == 4? Prompt user to play again. They won
 	li $v0, 4
@@ -235,6 +275,9 @@ verifyCharsAndOutputResults:
 	bne $t0, 'N', reInit					# If play again, sweep registers.
 	j endGame								# Else, end game
 	
+###############
+# Dfn: Re-initialize the game for another round, reset the registers that have existing values
+###############
 reInit: 
 	li $t0, 0								# Reset states
 	li $s2, 0								
@@ -247,15 +290,19 @@ reInit:
 	syscall
 	j main									# After sweeping registers, restart game with clean state
 	
+###############
+# Dfn: Print the exit string then go back to main.
+###############
 endGame:
-	la $a0, endStatement					# Thank you for playing!
+	la $a0, endStatement					# "Thanks for Playing"
 	li $v0, 4
 	syscall					
 
-	jr $ra 									# TAKE ME HOMEEEEEE!
+	jr $ra 									# TAKE ME HOMEEEEEE back to MAINNNNNNN!
 
+###############
+# Dfn: Exit program cleanly
+###############
 exit:
-	li $v0, 10								# Exit cleanly
+	li $v0, 10								
 	syscall 
-
-# It took more time to write comments that the actual coding for this assignment... I am sad :(
